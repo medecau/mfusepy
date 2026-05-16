@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["mfusepy"]
+# ///
 
 import argparse
 import collections
@@ -41,7 +45,11 @@ class Memory(fuse.Operations):
         self._opened: dict[int, str] = {}
 
     @fuse.overrides(fuse.Operations)
-    def init_with_config(self, conn_info: Optional[fuse.fuse_conn_info], config_3: Optional[fuse.fuse_config]) -> None:
+    def init_with_config(
+        self,
+        conn_info: Optional[fuse.fuse_conn_info],
+        config_3: Optional[fuse.fuse_config],
+    ) -> None:
         # This only works for FUSE 3 while the flag_nullpath_ok and flag_nopath class members work for FUSE 2 and 3!
         if config_3:
             config_3.nullpath_ok = True
@@ -95,8 +103,8 @@ class Memory(fuse.Operations):
 
         try:
             return attrs[name]
-        except KeyError:
-            raise fuse.FuseOSError(fuse.ENOATTR)
+        except KeyError as e:
+            raise fuse.FuseOSError(fuse.ENOATTR) from e
 
     @fuse.overrides(fuse.Operations)
     def listxattr(self, path: str) -> Iterable[str]:
@@ -149,7 +157,9 @@ class Memory(fuse.Operations):
     def readdir(self, path: str, fh: int) -> fuse.ReadDirResult:
         path = self._opened[fh]
         return [('.', self.files['/'], 0), ('..', self.files['/'], 0)] + [
-            (x[1:], info, 0) for x, info in self.files.items() if x.startswith(path) and len(x) > len(path)
+            (x[1:], info, 0)
+            for x, info in self.files.items()
+            if x.startswith(path) and len(x) > len(path)
         ]
 
     @fuse.overrides(fuse.Operations)
@@ -167,8 +177,8 @@ class Memory(fuse.Operations):
 
         try:
             del attrs[name]
-        except KeyError:
-            raise fuse.FuseOSError(fuse.ENOATTR)
+        except KeyError as e:
+            raise fuse.FuseOSError(fuse.ENOATTR) from e
 
         return 0
 
@@ -189,7 +199,9 @@ class Memory(fuse.Operations):
         return 0
 
     @fuse.overrides(fuse.Operations)
-    def setxattr(self, path: str, name: str, value: bytes, options, position: int = 0) -> int:
+    def setxattr(
+        self, path: str, name: str, value: bytes, options, position: int = 0
+    ) -> int:
         # Ignore options
         attrs: dict[str, bytes] = self.files[path].setdefault('attrs', {})
         attrs[name] = value
@@ -201,7 +213,11 @@ class Memory(fuse.Operations):
 
     @fuse.overrides(fuse.Operations)
     def symlink(self, target: str, source: str) -> int:
-        self.files[target] = {'st_mode': (stat.S_IFLNK | 0o777), 'st_nlink': 1, 'st_size': len(source)}
+        self.files[target] = {
+            'st_mode': (stat.S_IFLNK | 0o777),
+            'st_nlink': 1,
+            'st_size': len(source),
+        }
         self.data[target] = source.encode()
         return 0
 

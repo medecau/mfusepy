@@ -130,10 +130,12 @@ int main()
 
 PY_INFOS = {}
 for struct_name, member_names in STRUCT_NAMES.items():
-    fusepy_struct = getattr(mfusepy, struct_name, getattr(mfusepy, 'c_' + struct_name, None))
+    fusepy_struct = getattr(
+        mfusepy, struct_name, getattr(mfusepy, f'c_{struct_name}', None)
+    )
     assert fusepy_struct is not None
 
-    PY_INFOS[struct_name + " size"] = ctypes.sizeof(fusepy_struct)
+    PY_INFOS[f"{struct_name} size"] = ctypes.sizeof(fusepy_struct)
     C_CHECKER += f"""\n    printf("{struct_name} size:%zu\\n", sizeof(struct {struct_name}));\n"""
 
     for name in member_names:
@@ -151,27 +153,24 @@ print(C_CHECKER)
 
 
 def get_compiler():
-    compiler = os.environ.get('CC')
-    if not compiler:
-        for cc in ['cc', 'gcc', 'clang']:
-            if shutil.which(cc):
-                compiler = cc
-                break
-        else:
-            compiler = 'cc'
+    compiler = os.environ.get('CC') or next(
+        (cc for cc in ['cc', 'gcc', 'clang'] if shutil.which(cc)), 'cc'
+    )
     return compiler
 
 
 def c_run(name: str, source: str) -> str:
     with tempfile.TemporaryDirectory() as tmpdir:
-        c_file = os.path.join(tmpdir, name + '.c')
+        c_file = os.path.join(tmpdir, f'{name}.c')
         exe_file = os.path.join(tmpdir, name)
         preprocessed_file = os.path.join(tmpdir, name + '.preprocessed.c')
 
         with open(c_file, 'w', encoding='utf-8') as f:
             f.write(source)
 
-        print(f"FUSE version: {mfusepy.fuse_version_major}.{mfusepy.fuse_version_minor}")
+        print(
+            f"FUSE version: {mfusepy.fuse_version_major}.{mfusepy.fuse_version_minor}"
+        )
 
         # Common include locations for different OSes
         include_paths = [
@@ -193,7 +192,9 @@ def c_run(name: str, source: str) -> str:
         # Add possible pkg-config flags if available
         for fuse_lib in ("fuse", "fuse3"):
             try:
-                pkg_config_flags = subprocess.check_output(['pkg-config', '--cflags', fuse_lib], text=True).split()
+                pkg_config_flags = subprocess.check_output(
+                    ['pkg-config', '--cflags', fuse_lib], text=True
+                ).split()
                 cflags.extend(pkg_config_flags)
                 break
             except (subprocess.CalledProcessError, FileNotFoundError):
@@ -228,10 +229,15 @@ def c_run(name: str, source: str) -> str:
         return output
 
 
-@pytest.mark.skipif(os.name == 'nt', reason="C compiler check not implemented for Windows")
+@pytest.mark.skipif(
+    os.name == 'nt', reason="C compiler check not implemented for Windows"
+)
 def test_struct_layout():
     output = c_run("verify_structs", C_CHECKER)
-    c_infos = {line.split(':', 1)[0]: int(line.split(':', 1)[1]) for line in output.strip().split('\n')}
+    c_infos = {
+        line.split(':', 1)[0]: int(line.split(':', 1)[1])
+        for line in output.strip().split('\n')
+    }
     pprint.pprint(c_infos)
 
     fail = False

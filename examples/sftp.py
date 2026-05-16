@@ -1,4 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["mfusepy", "paramiko"]
+# ///
 
 import argparse
 import errno
@@ -48,10 +52,20 @@ class SFTP(fuse.Operations):
     def getattr(self, path: str, fh: Optional[int] = None):
         try:
             st = self.sftp.lstat(path)
-        except OSError:
-            raise fuse.FuseOSError(errno.ENOENT)
+        except OSError as e:
+            raise fuse.FuseOSError(errno.ENOENT) from e
 
-        return {key: getattr(st, key) for key in ('st_atime', 'st_gid', 'st_mode', 'st_mtime', 'st_size', 'st_uid')}
+        return {
+            key: getattr(st, key)
+            for key in (
+                'st_atime',
+                'st_gid',
+                'st_mode',
+                'st_mtime',
+                'st_size',
+                'st_uid',
+            )
+        }
 
     @fuse.overrides(fuse.Operations)
     def mkdir(self, path: str, mode: int) -> int:
@@ -115,11 +129,15 @@ def cli(args=None):
 
     logging.basicConfig(level=logging.DEBUG)
 
-    if not args.login:
-        if '@' in args.host:
-            args.login, _, args.host = args.host.partition('@')
+    if not args.login and '@' in args.host:
+        args.login, _, args.host = args.host.partition('@')
 
-    fuse.FUSE(SFTP(args.host, username=args.login), args.mount, foreground=True, nothreads=True)
+    fuse.FUSE(
+        SFTP(args.host, username=args.login),
+        args.mount,
+        foreground=True,
+        nothreads=True,
+    )
 
 
 if __name__ == '__main__':

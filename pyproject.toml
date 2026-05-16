@@ -1,17 +1,6 @@
-# See https://setuptools.readthedocs.io/en/latest/build_meta.html
-
 [build-system]
-# Use setuptools >= 43 because it automatically includes pyproject.toml in source distribution
-# Use setuptools >= 46.5 to use attr: package.__version__
-# Use setuptools >= 61 for pyproject.toml support
-# https://github.com/pypa/setuptools/issues/4903
-# Use setuptools >= 77 for project.license-files support
-# https://setuptools.readthedocs.io/en/latest/history.html#id284
-# Use setuptools <= 82 because the license specification changes backward-incompatible in 2026-02.
-# https://github.com/pypa/setuptools/issues/4903#issuecomment-2923109576
-# <= major must not be used for pinning because it will only match major.0.0 not any higher version!
-requires = ["setuptools >= 61, < 83"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "mfusepy"
@@ -28,8 +17,6 @@ classifiers = [
     "Operating System :: POSIX :: BSD :: FreeBSD",
     "Operating System :: POSIX :: BSD :: OpenBSD",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -45,6 +32,72 @@ requires-python = ">= 3.9"
 file = "README.md"
 content-type = "text/markdown"
 
-[tool.setuptools]
-py-modules = ["mfusepy"]
-license-files = ["LICENSE"]
+[tool.hatch.build.targets.wheel]
+only-include = ["mfusepy.py"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "mfusepy.py",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "examples/",
+    "tests/",
+]
+
+[dependency-groups]
+test = [
+    "pytest",
+    "pytest-order",
+    "ioctl-opt",
+    "paramiko",
+    "types-paramiko",
+]
+typecheck = ["ty"]
+dev = [
+    {include-group = "test"},
+    {include-group = "typecheck"},
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.format]
+quote-style = "preserve"
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = [
+    "A", "B", "E", "F", "G", "I", "W", "N", "ASYNC", "C4", "COM", "FLY", "FURB",
+    "ICN", "INT", "ISC", "LOG", "PERF", "PIE", "PLW", "PT", "PYI", "RET", "RSE",
+    "RUF", "SIM", "TID", "TC", "UP", "YTT",
+]
+ignore = [
+    "E501",     # Line length is the formatter's concern, not the linter's.
+    "F401",     # `from .version import __version__ as __version__` style re-exports.
+    "B904",     # `raise X from Y` not enforced; many `raise FuseOSError(...)` sites are clearer without it.
+    "N801",     # Some class names are snake_case to match ctypes.
+    "COM812",   # Trailing commas conflict with formatter.
+    "PLW0603",  # `global` statements are unavoidable in subprocess wrappers.
+    "PT017",
+    "RET504",   # https://github.com/astral-sh/ruff/issues/17292#issuecomment-3039232890
+    "RUF012",   # ctypes `_fields_` is not actually mutable but ruff doesn't know.
+    "SIM102",   # Nested if-statements are sometimes more readable.
+    "SIM105",
+    "SIM118",   # Bug: removes `.keys()` from sqlite3.Row, which is not a dict.
+]
+fixable = ["ALL"]
+unfixable = []
+external = ["W212"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/test_enoattr.py" = ["E402"]
+"tests/test_examples.py" = ["E402"]
+
+[tool.ty.rules]
+unresolved-import = "ignore"
+
+[tool.pytest.ini_options]
+enable_assertion_pass_hook = true

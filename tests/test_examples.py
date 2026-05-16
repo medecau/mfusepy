@@ -1,6 +1,3 @@
-# pylint: disable=wrong-import-position
-# pylint: disable=protected-access
-
 import ctypes
 import errno
 import fcntl
@@ -38,16 +35,20 @@ except ImportError:
     grp = None
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../examples')))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../examples'))
+)
 
-from loopback import cli as cli_loopback  # noqa: E402
-from memory import cli as cli_memory  # noqa: E402
-from memory_nullpath import cli as cli_memory_nullpath  # noqa: E402
-from readdir_returning_offsets import cli as cli_readdir_returning_offsets  # noqa: E402
-from readdir_with_offset import cli as cli_readdir_with_offset  # noqa: E402
+from loopback import cli as cli_loopback
+from memory import cli as cli_memory
+from memory_nullpath import cli as cli_memory_nullpath
+from readdir_returning_offsets import cli as cli_readdir_returning_offsets
+from readdir_with_offset import cli as cli_readdir_with_offset
 
 # Some Python interpreters, e.g. the macOS Python may lack os.*xattr APIs.
-os_has_xattr_funcs = all(hasattr(os, f) for f in ("listxattr", "setxattr", "getxattr", "removexattr"))
+os_has_xattr_funcs = all(
+    hasattr(os, f) for f in ("listxattr", "setxattr", "getxattr", "removexattr")
+)
 
 
 def filter_platform_files(files):
@@ -75,7 +76,9 @@ def filter_platform_files(files):
 def get_mount_output() -> str:
     """Return the output of the system's 'mount' command as a string."""
     try:
-        completed = subprocess.run(["mount"], capture_output=True, check=True, text=True)
+        completed = subprocess.run(
+            ["mount"], capture_output=True, check=True, text=True
+        )
         return completed.stdout
     except Exception as exc:
         return f"<Unable to run mount command>\n{exc}"
@@ -177,7 +180,9 @@ class RunCLI:
             if time.time() - t0 > self.timeout:
                 mount_list = "<Unable to run mount command>"
                 try:
-                    mount_list = subprocess.run("mount", capture_output=True, check=True).stdout.decode()
+                    mount_list = subprocess.run(
+                        "mount", capture_output=True, check=True
+                    ).stdout.decode()
                 except Exception as exception:
                     mount_list += f"\n{exception}"
                 raise RuntimeError(
@@ -197,7 +202,11 @@ class RunCLI:
         self.wait_for_mount_point()
 
         # Linux: fusermount -u, macOS: umount, FreeBSD: umount
-        cmd = ["fusermount", "-u", self.mount_point] if sys.platform == 'linux' else ["umount", self.mount_point]
+        cmd = (
+            ["fusermount", "-u", self.mount_point]
+            if sys.platform == 'linux'
+            else ["umount", self.mount_point]
+        )
         subprocess.run(cmd, check=True, capture_output=True)
 
         t0 = time.time()
@@ -222,7 +231,9 @@ def test_read_write_file_system(cli, tmp_path):
         arguments = []
     with RunCLI(cli, mount_point, arguments):
         st = os.stat(mount_point)
-        assert os.path.isdir(mount_point), f"{mount_point} is not a directory, st={stat_readable(st)}!"
+        assert os.path.isdir(mount_point), (
+            f"{mount_point} is not a directory, st={stat_readable(st)}!"
+        )
 
         path = mount_point / "foo"
         assert not path.is_dir()
@@ -231,7 +242,9 @@ def test_read_write_file_system(cli, tmp_path):
             n = path.write_bytes(b"bar")
         except PermissionError:
             mtab = get_mount_output()
-            pytest.fail(reason=f"PermissionError, mount_point: st={stat_readable(st)}, mtab:\n{mtab}")
+            pytest.fail(
+                reason=f"PermissionError, mount_point: st={stat_readable(st)}, mtab:\n{mtab}"
+            )
         else:
             assert n == 3
 
@@ -349,7 +362,9 @@ def test_use_inode(cli, tmp_path):
     arguments = []
     with RunCLI(cli, mount_point, arguments):
         st = os.stat(mount_point)
-        assert os.path.isdir(mount_point), f"{mount_point} is not a directory, st={stat_readable(st)}!"
+        assert os.path.isdir(mount_point), (
+            f"{mount_point} is not a directory, st={stat_readable(st)}!"
+        )
 
         assert os.stat(mount_point).st_ino == 31
 
@@ -360,7 +375,9 @@ def test_use_inode(cli, tmp_path):
             n = path.write_bytes(b"bar")
         except PermissionError:
             mtab = get_mount_output()
-            pytest.fail(reason=f"PermissionError, mount_point: st={stat_readable(st)}, mtab:\n{mtab}")
+            pytest.fail(
+                reason=f"PermissionError, mount_point: st={stat_readable(st)}, mtab:\n{mtab}"
+            )
         else:
             assert n == 3
 
@@ -371,10 +388,14 @@ def test_use_inode(cli, tmp_path):
         assert os.stat(path).st_ino == 100
 
 
-@pytest.mark.parametrize('cli', [cli_readdir_with_offset, cli_readdir_returning_offsets])
+@pytest.mark.parametrize(
+    'cli', [cli_readdir_with_offset, cli_readdir_returning_offsets]
+)
 def test_readdir_with_offset(cli, tmp_path):
     if sys.platform.startswith('openbsd') and cli == cli_readdir_with_offset:
-        pytest.skip("OpenBSD FUSE implementation uses byte offsets, incompatible with this example's logic")
+        pytest.skip(
+            "OpenBSD FUSE implementation uses byte offsets, incompatible with this example's logic"
+        )
     mount_point = tmp_path
     arguments = []
     with RunCLI(cli, mount_point, arguments):

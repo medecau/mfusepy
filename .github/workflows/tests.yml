@@ -13,55 +13,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.10'
+          python-version: '3.12'
+          enable-cache: true
 
-      - name: Install Dependencies
-        run: |
-          python3 -m pip install ioctl-opt paramiko types-paramiko pytest
+      - name: Install dev dependencies
+        run: uv sync --group dev
 
-      - name: Style Check With Ruff
-        run: |
-          # I hate when the CI fails after not pushing for a while because ruff has new default rules.
-          python3 -m pip install ruff~=0.14
-          ruff check --config tests/.ruff.toml -- $( git ls-tree -r --name-only HEAD | 'grep' -E '[.]py$' )
+      - name: Ruff lint
+        run: uv run ruff check .
 
-      - name: Style Check With Black
-        run: |
-          python3 -m pip install black
-          black -q --diff --line-length 120 --skip-string-normalization $( git ls-tree -r --name-only HEAD | 'grep' -E '[.]py$' ) > black.diff
-          if [ -s black.diff ]; then
-              cat black.diff
-              exit 123
-          fi
+      - name: Ruff format
+        run: uv run ruff format --check .
 
-      - name: Lint With Codespell
-        run: |
-          python3 -m pip install codespell
-          codespell $( git ls-tree -r --name-only HEAD | 'grep' -E '[.](py|md|txt|sh|yml)$' )
-
-      - name: Lint With Flake8
-        run: |
-          python3 -m pip install flake8
-          flake8 --config tests/.flake8 $( git ls-tree -r --name-only HEAD | 'grep' -E '[.]py$' )
-
-      - name: Lint With Pylint
-        run: |
-          python3 -m pip install pylint
-          pylint --rcfile tests/.pylintrc $( git ls-tree -r --name-only HEAD | 'grep' -E '[.]py$' ) | tee pylint.log
-          ! 'egrep' ': E[0-9]{4}: ' pylint.log
-
-      - name: Lint With Pytype
-        run: |
-          python3 -m pip install pytype
-          pytype -d import-error $( git ls-tree -r --name-only HEAD | 'grep' -E '[.]py$' )
-
-      - name: Lint With Mypy
-        run: |
-          yes | python3 -m pip install --upgrade-strategy eager --upgrade types-dataclasses mypy
-          mypy --config-file tests/.mypy.ini $( git ls-tree -r --name-only HEAD | 'grep' -E '[.]py$' )
+      - name: Type check (ty)
+        run: uv run ty check mfusepy.py
 
   Tests:
     runs-on: ${{ matrix.os }}
@@ -106,81 +74,64 @@ jobs:
       - uses: actions/checkout@v4
         with:
           # We need one tag for testing the git mount.
-          # This is BROKEN! God damn it. Is anything working at all...
           # https://github.com/actions/checkout/issues/1781
           fetch-tags: true
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up uv (with Python ${{ matrix.python-version }})
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: true
 
       - name: Install Dependencies (Linux)
         if: startsWith( matrix.os, 'ubuntu' )
-        run: |
-          sudo apt-get -y install libfuse2 libfuse-dev libfuse3-dev fuse3 wget
+        run: sudo apt-get -y install libfuse2 libfuse-dev libfuse3-dev fuse3 wget
 
       - name: Install Dependencies (MacOS)
         if: startsWith( matrix.os, 'macos' )
-        run: |
-          brew install -q macfuse
+        run: brew install -q macfuse
 
-      - name: Install pip Dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --upgrade wheel
-          python3 -m pip install --upgrade setuptools
-          # https://github.com/pyca/pynacl/issues/839
-          # https://github.com/pyca/pynacl/pull/848
-          python3 -m pip install --upgrade git+https://github.com/pyca/pynacl.git
-          python3 -m pip install --upgrade-strategy eager --upgrade twine build pytest pytest-order ioctl-opt paramiko types-paramiko
+      - name: Install test dependencies
+        run: uv sync --group test
 
       - name: Test Installation From Tarball
         run: |
-          python3 -m build
-          twine check dist/*
-          python3 -m pip install "$( find dist -name '*.tar.gz' | head -1 )"[full]
-
-      - name: Test Installation From Source
-        run: |
-          python3 -m pip install .
+          uv build
+          uv pip install --python "$(uv python find ${{ matrix.python-version }})" "$(find dist -name '*.tar.gz' | head -1)"
 
       - name: Test Import
-        run: |
-          python3 -c 'import mfusepy'
+        run: uv run --no-sync python -c 'import mfusepy'
 
       - name: Examples
         run: |
-          # Simply parsing the source runs the @overrides check!
+          # Simply parsing the source runs the @overrides check.
           for file in examples/*.py; do
-              python3 "$file" -h
+              uv run python "$file" -h
           done
 
       - name: Only test struct layout (MacOS)
         if: startsWith( matrix.os, 'macos' )
-        run: |
-          python3 -m pytest -s -v -rs tests/test_struct_layout.py
+        run: uv run pytest -s -v -rs tests/test_struct_layout.py
 
       - name: Unit Tests (FUSE 2)
         if: startsWith( matrix.os, 'ubuntu' )
         run: |
-          python3 -c 'import mfusepy; assert mfusepy.fuse_version_major == 2'
-          python3 -m pytest -v -rs tests
+          uv run python -c 'import mfusepy; assert mfusepy.fuse_version_major == 2'
+          uv run pytest -v -rs tests
 
       - name: Unit Tests (FUSE 3)
         if: startsWith( matrix.os, 'ubuntu' )
         run: |
           export FUSE_LIBRARY_PATH=$( dpkg -L libfuse3-3 | 'grep' -F .so | head -1 )
-          python3 -c 'import mfusepy; assert mfusepy.fuse_version_major == 3'
-          python3 -m pytest -v -rs tests
+          uv run python -c 'import mfusepy; assert mfusepy.fuse_version_major == 3'
+          uv run pytest -v -rs tests
 
       - name: Test Compatibility (Ratarmount)
         if: startsWith( matrix.os, 'ubuntu' )
         run: |
-          python3 -m pip install ratarmount
-          python3 -m pip install --force-reinstall .
+          uv run --with ratarmount python -c 'import ratarmount'
           mkdir -p mounted-tar
-          ratarmount tests/single-file.tar mounted-tar
+          uv run --with ratarmount ratarmount tests/single-file.tar mounted-tar
           [[ "$( cat mounted-tar/bar )" == "foo" ]]
           fusermount -u mounted-tar
 
@@ -189,10 +140,8 @@ jobs:
         run: |
           # https://github.com/ihaveamac/ninfs/commit/9554caa5ecb325a9893bce829fb17efc73d3622c
           # ^ Increases requirement from 3.8 to 3.12 seemingly for no reason at all. There is no commit after it...
-          python3 -m pip install git+https://github.com/ihaveamac/ninfs.git@v2.0
-          python3 -m pip install --force-reinstall .
           mkdir -p mounted-3dsx
-          ninfs threedsx tests/3dsfetch.3dsx mounted-3dsx
+          uv run --with 'git+https://github.com/ihaveamac/ninfs.git@v2.0' ninfs threedsx tests/3dsfetch.3dsx mounted-3dsx
           [[ "$( md5sum mounted-3dsx/icon.smdh )" =~ "a3d784b6f20182ebdf964589cbf427c2" ]]
           fusermount -u mounted-3dsx
 
@@ -237,72 +186,55 @@ jobs:
             set -euxo pipefail
             case "${{ matrix.os }}" in
               freebsd)
-                # Ensure a proper hostname/FQDN is set (VMs may not have one by default)
                 sudo -E /bin/sh -c 'grep -q "freebsd\.local" /etc/hosts || echo "127.0.0.1 freebsd.local freebsd" >> /etc/hosts'
                 sudo -E hostname freebsd.local
                 hostname
 
-                # Keep pkg from aborting on minor version drift
                 export IGNORE_OSVERSION=yes
 
-                # Packages
                 sudo -E pkg update -f
                 sudo -E pkg install -y git fusefs-libs python3 python311 py311-pip
 
-                # Make FUSE work
                 sudo -E kldload fusefs
                 sudo -E sysctl vfs.usermount=1
                 sudo -E chmod 666 /dev/fuse
 
-                # Install pip Dependencies
-                python3 -m pip install pytest pytest-order ioctl-opt
+                # uv may not have FreeBSD binaries; install via pip
+                python3 -m pip install --user uv
+                export PATH="$HOME/.local/bin:$PATH"
 
-                # Test Installation From Source
-                python3 -m pip install .
-
-                # Unit Tests (FUSE 2)
-                python3 -c 'import mfusepy; assert mfusepy.fuse_version_major == 2'
-                python3 -m pytest -s -v -rs tests
+                uv sync --group test
+                uv run python -c 'import mfusepy; assert mfusepy.fuse_version_major == 2'
+                uv run pytest -s -v -rs tests
                 ;;
               openbsd)
-                # Ensure a proper hostname/FQDN is set (VMs may not have one by default)
                 sudo -E /bin/sh -c 'grep -q "openbsd\.local" /etc/hosts || echo "127.0.0.1 openbsd.local openbsd" >> /etc/hosts'
                 sudo -E hostname openbsd.local
                 hostname
 
-                # Packages
                 sudo -E pkg_add git py3-pip py3-virtualenv py3-tox
                 sudo -E pkg_add sshfs-fuse  # needed for sideeffect of having fuse 2.6?
 
-                # Install pip Dependencies
-                python3 -m venv .venv
-                source .venv/bin/activate
-                python3 -m pip install pytest pytest-order ioctl-opt
+                python3 -m pip install --user uv
+                export PATH="$HOME/.local/bin:$PATH"
 
-                # Test Installation From Source
-                python3 -m pip install .
-
-                # Unit Tests (FUSE 2)
-                python3 -c 'import mfusepy; assert mfusepy.fuse_version_major == 2'
+                uv sync --group test
+                uv run python -c 'import mfusepy; assert mfusepy.fuse_version_major == 2'
 
                 # FUSE mounting only works as root on OpenBSD
-                sudo -E .venv/bin/python3 -m pytest -s -v -rs tests
+                sudo -E env PATH="$PATH" uv run pytest -s -v -rs tests
                 ;;
               netbsd)
-                # Ensure a proper hostname/FQDN is set (VMs may not have one by default)
                 sudo -E /bin/sh -c 'grep -q "netbsd\.local" /etc/hosts || echo "127.0.0.1 netbsd.local netbsd" >> /etc/hosts'
                 sudo -E hostname netbsd.local
                 hostname
 
-                # Packages
                 sudo -E pkgin -y update
                 sudo -E pkgin -y install git fuse perfuse python311 py311-pip
                 sudo -E ln -sf /usr/pkg/bin/python3.11 /usr/pkg/bin/python3
 
-                # Fix PATH
                 export PATH="/usr/pkg/bin:/usr/pkg/sbin:/sbin:/usr/sbin:$PATH"
 
-                # Make FUSE work (NetBSD)
                 sudo sysctl -w vfs.generic.usermount=1
                 sudo sysctl -w kern.sbmax=4194304
                 sudo chmod 666 /dev/puffs
@@ -310,17 +242,16 @@ jobs:
                 # avoid permissions issue for perfused trace file:
                 sudo chmod 777 /var/run
 
-                # Install pip Dependencies
-                python3 -m pip install pytest pytest-order ioctl-opt
+                python3 -m pip install --user uv
+                export PATH="$HOME/.local/bin:$PATH"
 
-                # Test Installation From Source
-                python3 -m pip install .
+                uv sync --group test
 
                 # preserve pytest exit status, always show logs
                 rc=0
-                python3 -m pytest -s -v -rs tests/test_struct_layout.py
+                uv run pytest -s -v -rs tests/test_struct_layout.py
                 # for now, run the tests as root, too many PermissionErrors:
-                sudo -E python3 -m pytest -s -v -rs tests || rc=$?
+                sudo -E env PATH="$PATH" uv run pytest -s -v -rs tests || rc=$?
                 exit "$rc"
                 ;;
             esac

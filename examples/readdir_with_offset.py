@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["mfusepy"]
+# ///
 
 import argparse
 import errno
@@ -64,10 +68,17 @@ class ReaddirWithOffset(fuse.Operations):
         # After ~10 entries, warn about the old bug.
         self._readdir_calls += 1
         if self._readdir_calls >= self._readdir_call_limit * self._file_count:
-            log.warning("If you see this message repeating, the FUSE wrapper bug is triggered!")
+            log.warning(
+                "If you see this message repeating, the FUSE wrapper bug is triggered!"
+            )
             sys.exit(1)
 
-        log.debug("readdir called %s times, path=%s, offset=%d", self._readdir_calls, path, offset)
+        log.debug(
+            "readdir called %s times, path=%s, offset=%d",
+            self._readdir_calls,
+            path,
+            offset,
+        )
 
         if path != '/':
             raise fuse.FuseOSError(errno.ENOENT)

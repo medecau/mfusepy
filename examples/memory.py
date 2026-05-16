@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["mfusepy"]
+# ///
 
 import argparse
 import collections
@@ -79,8 +83,8 @@ class Memory(fuse.LoggingMixIn, fuse.Operations):
 
         try:
             return attrs[name]
-        except KeyError:
-            raise fuse.FuseOSError(fuse.ENOATTR)
+        except KeyError as e:
+            raise fuse.FuseOSError(fuse.ENOATTR) from e
 
     @fuse.overrides(fuse.Operations)
     def listxattr(self, path: str) -> Iterable[str]:
@@ -128,8 +132,8 @@ class Memory(fuse.LoggingMixIn, fuse.Operations):
 
         try:
             del attrs[name]
-        except KeyError:
-            raise fuse.FuseOSError(fuse.ENOATTR)
+        except KeyError as e:
+            raise fuse.FuseOSError(fuse.ENOATTR) from e
 
         return 0
 
@@ -150,7 +154,9 @@ class Memory(fuse.LoggingMixIn, fuse.Operations):
         return 0
 
     @fuse.overrides(fuse.Operations)
-    def setxattr(self, path: str, name: str, value, options: int, position: int = 0) -> int:
+    def setxattr(
+        self, path: str, name: str, value, options: int, position: int = 0
+    ) -> int:
         # Ignore options
         attrs: dict[str, bytes] = self.files[path].setdefault('attrs', {})
         attrs[name] = value
@@ -162,7 +168,11 @@ class Memory(fuse.LoggingMixIn, fuse.Operations):
 
     @fuse.overrides(fuse.Operations)
     def symlink(self, target: str, source: str) -> int:
-        self.files[target] = {'st_mode': (stat.S_IFLNK | 0o777), 'st_nlink': 1, 'st_size': len(source)}
+        self.files[target] = {
+            'st_mode': (stat.S_IFLNK | 0o777),
+            'st_nlink': 1,
+            'st_size': len(source),
+        }
         self.data[target] = source.encode()
         return 0
 
@@ -227,7 +237,15 @@ class Memory(fuse.LoggingMixIn, fuse.Operations):
         return len(data)
 
     @fuse.overrides(fuse.Operations)
-    def ioctl(self, path: str, cmd: int, arg: ctypes.c_void_p, fh: int, flags: int, data: ctypes.c_void_p) -> int:
+    def ioctl(
+        self,
+        path: str,
+        cmd: int,
+        arg: ctypes.c_void_p,
+        fh: int,
+        flags: int,
+        data: ctypes.c_void_p,
+    ) -> int:
         """
         An example ioctl implementation that defines a command with integer code corresponding to 'M' in ASCII,
         which returns the 32-bit integer argument incremented by 1.
@@ -235,15 +253,14 @@ class Memory(fuse.LoggingMixIn, fuse.Operations):
         from ioctl_opt import IOWR
 
         iowr_m = IOWR(ord('M'), 1, ctypes.c_uint32)
-        if cmd == iowr_m:
-            inbuf = ctypes.create_string_buffer(4)
-            ctypes.memmove(inbuf, data, 4)
-            data_in = struct.unpack('<I', inbuf)[0]
-            data_out = data_in + 1
-            outbuf = struct.pack('<I', data_out)
-            ctypes.memmove(data, outbuf, 4)
-        else:
+        if cmd != iowr_m:
             raise fuse.FuseOSError(errno.ENOTTY)
+        inbuf = ctypes.create_string_buffer(4)
+        ctypes.memmove(inbuf, data, 4)
+        data_in = struct.unpack('<I', inbuf)[0]
+        data_out = data_in + 1
+        outbuf = struct.pack('<I', data_out)
+        ctypes.memmove(data, outbuf, 4)
         return 0
 
 
