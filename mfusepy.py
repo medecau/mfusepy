@@ -114,32 +114,24 @@ if not _libfuse_path:
             or find_library('fuse-t')
         )
     elif _system == 'Windows':
-        try:
-            import _winreg as reg
-        except ImportError:
-            import winreg as reg
+        import winreg
 
         def reg32_get_value(rootkey, keyname, valname):
             key, val = None, None
             try:
-                key = reg.OpenKey(  # ty: ignore[unresolved-attribute]
-                    rootkey,
-                    keyname,
-                    0,
-                    reg.KEY_READ | reg.KEY_WOW64_32KEY,  # ty: ignore[unresolved-attribute]
+                key = winreg.OpenKey(
+                    rootkey, keyname, 0, winreg.KEY_READ | winreg.KEY_WOW64_32KEY
                 )
-                val = str(reg.QueryValueEx(key, valname)[0])  # ty: ignore[unresolved-attribute]
+                val = str(winreg.QueryValueEx(key, valname)[0])
             except OSError:
                 pass
             finally:
                 if key is not None:
-                    reg.CloseKey(key)  # ty: ignore[unresolved-attribute]
+                    winreg.CloseKey(key)
             return val
 
         _libfuse_path = reg32_get_value(
-            reg.HKEY_LOCAL_MACHINE,  # ty: ignore[unresolved-attribute]
-            r"SOFTWARE\WinFsp",
-            r"InstallDir",
+            winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WinFsp", r"InstallDir"
         )
         if _libfuse_path:
             arch = "x64" if sys.maxsize > 0xFFFFFFFF else "x86"

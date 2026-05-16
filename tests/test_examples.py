@@ -210,9 +210,7 @@ class RunCLI:
         subprocess.run(cmd, check=True, capture_output=True)
 
         t0 = time.time()
-        while True:
-            if not os.path.ismount(self.mount_point):
-                break
+        while os.path.ismount(self.mount_point):
             if time.time() - t0 > self.timeout:
                 raise RuntimeError("Unmounting did not finish in time!")
             time.sleep(0.1)

@@ -58,7 +58,27 @@ dev = [
     {include-group = "test"},
     {include-group = "typecheck"},
     "ruff",
+    "poethepoet",
 ]
+
+[tool.poe.tasks]
+# Fix mode (modifies files) — used by the local pre-commit hook.
+fmt = "ruff format ."
+fix = "ruff check --fix-only ."
+
+# Check mode (read-only) — used in CI.
+fmt-check = "ruff format --check ."
+lint = "ruff check ."
+
+# Type check — kept narrow to match CI; tests/ and examples/ have unsilenced findings.
+types = "ty check mfusepy.py"
+
+# Tests.
+test = "pytest -v -rs tests"
+
+# Aggregates.
+check = ["fmt-check", "lint", "types"]
+precommit = ["fmt", "fix", "types", "test"]
 
 [tool.ruff]
 line-length = 88
@@ -95,6 +115,11 @@ external = ["W212"]
 [tool.ruff.lint.per-file-ignores]
 "tests/test_enoattr.py" = ["E402"]
 "tests/test_examples.py" = ["E402"]
+
+[tool.ty.environment]
+# Check as if every supported platform were active, so the Windows-only winreg
+# branch and Linux-only fcntl code paths are both type-checked.
+python-platform = "all"
 
 [tool.ty.rules]
 unresolved-import = "ignore"

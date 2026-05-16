@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
-uv run ruff check .
-uv run ruff format --check .
-uv run ty check mfusepy.py
+# Thin wrapper around the canonical task definition in pyproject.toml
+# ([tool.poe.tasks].check = fmt-check + lint + types).
+exec uv run poe check
