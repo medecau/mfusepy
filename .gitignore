@@ -1,7 +1,12 @@
+.*
+
+!.gitignore
+!.github
+
 *.whl
 *.tar.gz
 *.egg-info
-.*
+
 build
 dist
 __pycache__
