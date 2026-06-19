@@ -193,13 +193,14 @@ jobs:
                 sudo -E sysctl vfs.usermount=1
                 sudo -E chmod 666 /dev/fuse
 
-                # uv may not have FreeBSD binaries; install via pip
-                python3 -m pip install --user uv
-                export PATH="$HOME/.local/bin:$PATH"
-
-                uv sync --group test
-                uv run python -c 'import mfusepy; assert mfusepy.fuse_version_major == 2'
-                uv run pytest -s -v -rs tests
+                # uv has no FreeBSD wheels (building from sdist needs Rust), and
+                # `uv sync --group test` would also drag in paramiko -> cryptography,
+                # which likewise needs Rust. Use the system Python and install only
+                # the pure-Python deps the suite actually imports.
+                python3 -m pip install pytest pytest-order ioctl-opt
+                python3 -m pip install .
+                python3 -c 'import mfusepy; assert mfusepy.fuse_version_major == 2'
+                python3 -m pytest -s -v -rs tests
                 ;;
               openbsd)
                 sudo -E /bin/sh -c 'grep -q "openbsd\.local" /etc/hosts || echo "127.0.0.1 openbsd.local openbsd" >> /etc/hosts'
@@ -209,14 +210,18 @@ jobs:
                 sudo -E pkg_add git py3-pip py3-virtualenv py3-tox
                 sudo -E pkg_add sshfs-fuse  # needed for sideeffect of having fuse 2.6?
 
-                python3 -m pip install --user uv
-                export PATH="$HOME/.local/bin:$PATH"
-
-                uv sync --group test
-                uv run python -c 'import mfusepy; assert mfusepy.fuse_version_major == 2'
+                # uv has no OpenBSD wheels and the system Python is PEP-668
+                # externally-managed, so use a venv with the system Python and
+                # install only the pure-Python deps the suite imports (paramiko,
+                # pulled in by the `test` group, would need Rust to build here).
+                python3 -m venv .venv
+                . .venv/bin/activate
+                python3 -m pip install pytest pytest-order ioctl-opt
+                python3 -m pip install .
+                python3 -c 'import mfusepy; assert mfusepy.fuse_version_major == 2'
 
                 # FUSE mounting only works as root on OpenBSD
-                sudo -E env PATH="$PATH" uv run pytest -s -v -rs tests
+                sudo -E .venv/bin/python3 -m pytest -s -v -rs tests
                 ;;
               netbsd)
                 sudo -E /bin/sh -c 'grep -q "netbsd\.local" /etc/hosts || echo "127.0.0.1 netbsd.local netbsd" >> /etc/hosts'
@@ -236,16 +241,17 @@ jobs:
                 # avoid permissions issue for perfused trace file:
                 sudo chmod 777 /var/run
 
-                python3 -m pip install --user uv
-                export PATH="$HOME/.local/bin:$PATH"
-
-                uv sync --group test
+                # uv has no NetBSD wheels (building from sdist needs Rust), and the
+                # `test` group's paramiko -> cryptography would also need Rust. Use
+                # the system Python with only the pure-Python deps the suite imports.
+                python3 -m pip install pytest pytest-order ioctl-opt
+                python3 -m pip install .
 
                 # preserve pytest exit status, always show logs
                 rc=0
-                uv run pytest -s -v -rs tests/test_struct_layout.py
+                python3 -m pytest -s -v -rs tests/test_struct_layout.py
                 # for now, run the tests as root, too many PermissionErrors:
-                sudo -E env PATH="$PATH" uv run pytest -s -v -rs tests || rc=$?
+                sudo -E python3 -m pytest -s -v -rs tests || rc=$?
                 exit "$rc"
                 ;;
             esac
